@@ -1,9 +1,12 @@
 var express = require('express');
 var router = express.Router();
 const model = require('../models/index');
+const bcrypt = require('bcryptjs')
+const bcryptSalt = bcrypt.genSaltSync(10)
+const auth = require('../middlewares/auth');
 
 // GET users listing.
-router.get('/', async (req, res, next) => {
+router.get('/', auth, async function (req, res, next) {
   try {
     const users = await model.users.findAll({});
     if (users.length !== 0) {
@@ -25,26 +28,34 @@ router.get('/', async (req, res, next) => {
 });
 
 // POST users
-router.post('/', async (req, res, next) => {
+router.post('/', async function (req, res, next) {
   try {
     const {
       name,
       email,
       password,
     } = req.body;
-    const users = await model.users.create({
-      name,
-      email,
-      password,
+    const check = await model.users.findOne({ email }, {
+      where: { email }
     });
-    if (users) {
-      res.status(201).json({
-        'status': 'OK',
-        'messages': 'User berhasil ditambahkan',
-        'data': users,
-      })
+    if (!check) {
+      const hashPassword = bcrypt.hashSync(password, bcryptSalt);
+      const users = await model.users.create({
+        name,
+        email,
+        password: hashPassword,
+      });
+      if (users) {
+        res.status(201).json({
+          'status': 'OK',
+          'messages': 'User berhasil ditambahkan',
+          'data': users,
+        })
+      } else {
+        throw new Error('oops');
+      }
     } else {
-      throw new Error('oops');
+      throw new Error('Already registered');
     }
   } catch (err) {
     res.status(400).json({
@@ -56,7 +67,7 @@ router.post('/', async (req, res, next) => {
 });
 
 // UPDATE users
-router.patch('/:id', async (req, res, next) => {
+router.patch('/:id', auth, async function (req, res, next) {
   try {
     const usersId = req.params.id;
     const { name } = req.body;
@@ -65,7 +76,6 @@ router.patch('/:id', async (req, res, next) => {
         id: usersId
       }
     });
-
     if (users) {
       res.json({
         'status': 'OK',
@@ -85,7 +95,7 @@ router.patch('/:id', async (req, res, next) => {
 });
 
 // DELETE users
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', auth, async function (req, res, next) {
   try {
     const usersId = req.params.id;
     const users = await model.users.destroy({
